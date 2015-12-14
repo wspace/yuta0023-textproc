@@ -1,4 +1,4 @@
-class Whitespace
+class Tokenizer
 
   @@imps = {
     " " => :stack,
@@ -45,11 +45,13 @@ class Whitespace
 
   @@parameter = [:push, :label, :call, :jump, :jz, :jn]
 
+  attr_reader :tokens
+
   def initialize
     @tokens = []
     @program = ARGF.read.tr("^ \t\n", "")
     tokenize
-    p @tokens
+    # p @tokens
   end
 
   def tokenize
@@ -86,4 +88,70 @@ class Whitespace
     end
   end
 end
-Whitespace.new
+class Executor
+  def initialize(tokens)
+    @tokens = tokens
+  end
+
+  def run
+    @pc = 0
+    @stack = []
+    @heap = {}
+    @call = []
+    loop do
+      imp, cmd, prm = @tokens[@pc]
+      @pc += 1
+      exit if @tokens.count < @pc
+      case cmd
+      when :push then @stack.push prm
+      when :dup then @stack.push @stack[-1]
+      when :swap then @stack[-1],@stack[-2] = @stack[-2], @stack[-1]
+      when :discard then @stack.pop
+
+      when :add then math('+')
+      when :sub then math('-')
+      when :mul then math('*')
+      when :div then math('/')
+      when :mod then math('%')
+
+      when :store
+        value = @stack.pop
+        address = @stack.pop
+        @heap[address] = value
+      when :retrive then @stack.push @heap[@stack.pop]
+
+      when :label
+      when :call
+        @call.push(@pc)
+        jump(prm)
+      when :jump then jump(prm)
+      when :jz then jump(prm) if @stack.pop == 0
+      when :jn then jump(prm) if @stack.pop < 0
+      when :ret then @pc = @call.pop
+      when :exit then exit
+
+      when :outchar then print @stack.pop.chr
+      when :outnum then print @stack.pop
+      when :readchar then @heap[@stack.pop] = $stdin.gets
+      when :randum then @heap[@stack.pop] = $sdin.gets.to_i
+      else raise Exception, 'Executor faild'
+      end
+    end
+  end
+
+  def math(op)
+    b = @stack.pop
+    a = @stack.pop
+    @stack.push eval("a #{op} b")
+  end
+
+  def jump(label)
+    @tokens.each_with_index do |token,i|
+      if token == [:flow, :label, label]
+        @pc = i
+        break
+      end
+    end
+  end
+end
+Executor.new(Tokenizer.new.tokens).run
